@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>MissionControl Auction demo</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.2/dist/leaflet.css"
+        integrity="sha256-sA+zWATbFveLLNqWO2gtiw3HL/lh1giY/Inf1BJ0z14=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.2/dist/leaflet.js"
+        integrity="sha256-o9N1jGDZrf5tS+Ft4gbIK7mYMipq9lqpVJ91xHSyKhg=" crossorigin=""></script>
+</head>
+
+<body>
+    <script src="{{ url_for('static', filename='jquery/jquery-3.4.1.min.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+        crossorigin="anonymous"></script>
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand ms-3" href="/">
+            SMRA - Simultaneous Multi-Round Auction
+        </a>
+    </nav>
+
+    <div id="map" class="position-absolute" style="height: 100vh; width: 100%"></div>
+    <table class="table table-striped position-absolute top-10 start-0" style="z-index: 1000">
+        <thead>
+            <tr id="biddingHeader">
+                <th scope="col"></th>
+                <th scope="col">Buoy1 (300)</th>
+                <th scope="col">Buoy2 (400)</th>
+                <th scope="col">Buoy3 (250)</th>
+            </tr>
+        </thead>
+        <tbody id="biddingBody">
+        </tbody>
+    </table>
+
+
+    <div class="row position-absolute bottom-0 end-0 mb-3 me-3" style="z-index: 1000;">
+        <button id="addDroneButton" onclick="addDrone()" type="button" class="btn btn-success col me-2">
+            Add drone
+        </button>
+        <button id="addBuoyButton" onclick="addBuoy()" type="button" class="btn btn-success col me-2">
+            Add buoy
+        </button>
+
+        <button onclick="getSimulationState(true)" type="button" id="runEnd" class="btn btn-primary col me-2"
+            style="height: 65px; width: 100px">
+            Run to the end
+        </button>
+        <button onclick="getSimulationState()" type="button" id="nextRound" class="btn btn-primary col"
+            style="height: 65px; width: 100px">
+            Next round
+        </button>
+    </div>
+
+</body>
+
+<script>
+    const maxLat = 46.75383594777452
+    const maxLon = 11.447666155002901
+    const minLat = 46.729730335433485
+    const minLon = 11.43058819736498
+
+    let simulationState = {
+        bidders: [],
+        assets: [
+            {
+                position: [11.441322, 46.740212],
+                name: "Buoy1",
+                price: 300
+            },
+            {
+                position: [11.44466292962256, 46.74345686343365],
+                name: "Buoy2",
+                price: 400
+            },
+            {
+                position: [11.448087323805462, 46.742771459726164],
+                name: "Buoy3",
+                price: 250
+            }
+        ],
+        bids: []
+    };
+    const droneIcon = L.icon({
+        iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Drone.svg/240px-Drone.svg.png",
+        iconSize: [32, 32],
+    });
+    const taskIcon = L.icon({
+        iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Antu_mail-task.svg/240px-Antu_mail-task.svg.png",
+        iconSize: [32, 32],
+    });
+    const homeIcon = L.icon({
+        iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Home_free_icon.svg/240px-Home_free_icon.svg.png",
+        iconSize: [32, 32],
+    });
+    /**
+     * @type {L.Map}
+     */
+    let routes = [];
+    let colors = [];
+
+    // mapboxgl.accessToken = 'your-token';
+    const map = L.map('map').setView([46.741, 11.442], 15);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+    // const map = new mapboxgl.Map({
+    //     container: 'map', // container ID
+    //     style: 'mapbox://styles/mapbox/streets-v11', // style URL
+    //     center: [11.444131, 46.741777], // starting position [lng, lat]
+    //     zoom: 15 // starting zoom
+    // });
+
+    //map.on("load", function () {
+    L.marker([46.73900067369887, 11.439390329077453], { title: "Home", icon: homeIcon }).addTo(map);
+    // new mapboxgl.Marker({ color: 'pink' })
+    //     .setLngLat([11.439390329077453, 46.73900067369887])
+    //     .setPopup(new mapboxgl.Popup().setHTML(`<h3>Home</h3>`))
+    //     .addTo(map);
+
+    for (const bidder of [
+        {
+            position: [11.443594925734347, 46.739855492291575],
+            name: "Drone1",
+            budget: 600
+        },
+        {
+            position: [11.44305244751043, 46.743224524185756],
+            name: "Drone2",
+            budget: 450
+        }
+    ]) {
+        addDrone(bidder);
+    }
+
+    for (const asset of simulationState['assets']) {
+        L.marker([asset.position[1], asset.position[0]], { title: asset.name, icon: taskIcon }).addTo(map);
+    }
+    //
+
+    function getSimulationState(toTheEnd = false) {
+        $("#addDroneButton").hide()
+        $("#addBuoyButton").hide()
+        simulationState['to_the_end'] = toTheEnd
+
+        console.log("Requesting...")
+        $.ajax({
+            url: "get_simulation_state",
+            type: "POST",
+            data: JSON.stringify(simulationState),
+            contentType: "application/json",
+            success: function (data) {
+                if (colors.length === 0) {
+                    colors = getListOfNiceColors(data['bidders'].length)
+                }
+
+                simulationState = data
+                const biddingBody = $("#biddingBody")
+                biddingBody.empty()
+
+                for (let i = 0; i < data['bidders'].length; i++) {
+                    const bidder = data['bidders'][i]
+                    const row = $("<tr>")
+                    row.append($("<th>", {
+                        scope: "row",
+                        text: bidder['name']
+                    }))
+                    for (const bid of data['bids'][i]) {
+                        row.append($("<td>", { text: formatNumber(bid) }))
+                    }
+                    biddingBody.append(row)
+                }
+
+                for (const route of routes) {
+                    route.remove()
+                }
+                routes = []
+
+                for (let i = 0; i < data['routes'].length; i++) {
+                    const newRoute = L.polyline(data['routes'][i].map((coordinate) => [coordinate[1], coordinate[0]]), { color: colors[i] })
+                    newRoute.addTo(map)
+                    routes.push(newRoute)
+                    // routes.push(i)
+                    // map.addSource("route" + i, {
+                    //     'type': 'geojson',
+                    //     'data': {
+                    //         'type': 'Feature',
+                    //         'properties': {},
+                    //         'geometry': {
+                    //             'type': 'LineString',
+                    //             'coordinates': data['routes'][i]
+                    //         }
+                    //     }
+                    // });
+                    // map.addLayer({
+                    //     'id': "route" + i,
+                    //     'type': 'line',
+                    //     'source': 'route' + i,
+                    //     'layout': {
+                    //         'line-join': 'round',
+                    //         'line-cap': 'round'
+                    //     },
+                    //     'paint': {
+                    //         'line-color': colors[i],
+                    //         'line-width': 2 + data['routes'].length * 2 - i * 2,
+                    //         'line-opacity': 1
+                    //     }
+                    // });
+                }
+
+                if (data['finished']) {
+                    alert("Auction finished")
+                    $("#nextRound").hide()
+                    $("#runEnd").hide()
+                }
+            }
+        })
+    }
+
+    function formatNumber(num) {
+        return (Math.round(num * 100) / 100).toFixed(1);
+    }
+
+    function addDrone(bidder = {
+        position: getRandomCoordinate(),
+        name: "Drone" + (simulationState['bidders'].length + 1),
+        budget: getRandomInRange(300, 700, 0)
+    }) {
+        bidder.name += " (" + bidder.budget + "s battery)"
+        L.marker([bidder.position[1], bidder.position[0]], { title: bidder.name, icon: droneIcon }).addTo(map);
+        // new mapboxgl.Marker({ color: 'red' })
+        //     .setLngLat(coordinate)simulationState['bidders']
+        //     .setPopup(new mapboxgl.Popup().setHTML(`<h3>${"Drone" + (simulationState['bidders'].length + 1)} (${budget})</h3>`))
+        //     .addTo(map);
+
+        let row = $("<tr>")
+        row.append($("<th>", {
+            scope: "row",
+            text: bidder.name
+        }))
+
+        const biddingBody = $("#biddingBody")
+
+        let bids = []
+        for (let i = 0; i < simulationState['assets'].length; i++) {
+            bids.push(0)
+            row.append($("<td>", {
+                text: 0
+            }));
+        }
+        biddingBody.append(row)
+
+        simulationState['bidders'].push(bidder)
+
+        simulationState['bids'].push(bids)
+    }
+
+    function addBuoy() {
+        const coordinate = getRandomCoordinate()
+        const price = getRandomInRange(150, 350, 0)
+        const asset = {
+            position: coordinate,
+            name: "Buoy" + (simulationState['assets'].length),
+            price: price
+        }
+        simulationState['assets'].push(asset)
+        L.marker([asset.position[1], asset.position[0]], { title: `${asset.name}(${asset.price})`, icon: taskIcon }).addTo(map);
+        // new mapboxgl.Marker({
+        //     color: 'blue',
+        //     scale: price / 200
+        // })
+        //     .setLngLat(coordinate)
+        //     .setPopup(new mapboxgl.Popup().setHTML(`<h3>${asset.name}:${asset.price}</h3>`))
+        //     .addTo(map);
+
+        $("#biddingHeader").append($("<th>", {
+            scope: "row",
+            text: "Buoy" + (simulationState['assets'].length) + " (" + price + ")"
+        }))
+
+        for (let i = 0; i < simulationState['bidders'].length; i++) {
+            simulationState['bids'][i].push(0)
+            $("#biddingBody").children().eq(i).append($("<td>", {
+                text: 0
+            }))
+        }
+    }
+
+    function getRandomCoordinate() {
+        return [getRandomInRange(minLon, maxLon, 7), getRandomInRange(minLat, maxLat, 7)]
+    }
+
+    function getRandomInRange(from, to, fixed) {
+        return (Math.random() * (to - from) + from).toFixed(fixed) * 1;
+    }
+
+    function getListOfNiceColors(length = 3) {
+        let colors = []
+        for (let i = 0; i < length; i++) {
+            colors.push(`hsl(${360 * i / length},100%,50%)`)
+        }
+        return colors
+    }
+
+</script>
+
+</html>

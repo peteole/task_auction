@@ -1,0 +1,10 @@
+Flask
+Flask-Login
+Werkzeug
+ortools
+requests
+geojson
+pyvisgraph
+tqdm >= 4.23.4
+utm
+flask_cors
