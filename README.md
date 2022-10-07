@@ -1,4 +1,4 @@
-# 🌍 Navigation subsystem 🗺️
+# 🌍 Task auction 🗺️
 ## What is this?
 This project was created as a POC for distributing tasks in a decentralized manner using a simultaneous multi round auction during [Ferienakademie](https://ferienakademie.de).
 Drones having a limited flight time left should distribute tasks among each other in a sensible way.
